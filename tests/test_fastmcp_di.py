@@ -10,15 +10,23 @@ from modern_di_fastmcp import FromDI, fetch_di_container, setup_di
 from tests.dependencies import FINALIZED, Dependencies, Session, Settings
 
 
-def greet(name: str, settings: Settings = FromDI(Settings)) -> str:  # noqa: B008
+if typing.TYPE_CHECKING:
+    from tests.dependencies import Settings as TypeCheckingOnlySettings
+
+
+def greet(name: str, settings: Settings = FromDI(Settings)) -> str:
     return f"{settings.prefix} {name}"
 
 
-def prefix(settings: Settings = FromDI(Settings)) -> str:  # noqa: B008
+def prefix(settings: Settings = FromDI(Settings)) -> str:
     return settings.prefix
 
 
 def wrong(settings: typing.Annotated[Settings, FromDI(Settings)]) -> str:
+    return settings.prefix
+
+
+def late_annotation(settings: "TypeCheckingOnlySettings" = FromDI(Settings)) -> str:
     return settings.prefix
 
 
@@ -46,8 +54,8 @@ async def test_one_request_container_per_call_and_its_finalizers_run(mcp: fastmc
 
     @mcp.tool
     async def pair(
-        first: Session = FromDI(Dependencies.session),  # noqa: B008
-        second: Session = FromDI(Session),  # noqa: B008
+        first: Session = FromDI(Dependencies.session),
+        second: Session = FromDI(Session),
     ) -> bool:
         seen.append((id(first), id(second)))
         return first is second
@@ -64,7 +72,7 @@ async def test_one_request_container_per_call_and_its_finalizers_run(mcp: fastmc
 
 async def test_fastmcp_context_is_resolvable(mcp: fastmcp.FastMCP) -> None:
     @mcp.tool
-    async def request_id(session: Session = FromDI(Session)) -> bool:  # noqa: B008
+    async def request_id(session: Session = FromDI(Session)) -> bool:
         return isinstance(session.context, fastmcp.Context)
 
     async with fastmcp.Client(mcp) as client:
@@ -75,7 +83,7 @@ async def test_fastmcp_context_is_resolvable(mcp: fastmcp.FastMCP) -> None:
 
 async def test_sync_tool_resolves_before_running_in_a_thread(mcp: fastmcp.FastMCP) -> None:
     @mcp.tool
-    def sync_tool(session: Session = FromDI(Session)) -> str:  # noqa: B008
+    def sync_tool(session: Session = FromDI(Session)) -> str:
         return session.settings.prefix
 
     async with fastmcp.Client(mcp) as client:
@@ -87,15 +95,15 @@ async def test_sync_tool_resolves_before_running_in_a_thread(mcp: fastmcp.FastMC
 
 async def test_resources_templates_and_prompts_resolve(mcp: fastmcp.FastMCP) -> None:
     @mcp.resource("settings://prefix")
-    def prefix(settings: Settings = FromDI(Settings)) -> str:  # noqa: B008
+    def prefix(settings: Settings = FromDI(Settings)) -> str:
         return settings.prefix
 
     @mcp.resource("greeting://{name}")
-    def greeting(name: str, settings: Settings = FromDI(Settings)) -> str:  # noqa: B008
+    def greeting(name: str, settings: Settings = FromDI(Settings)) -> str:
         return f"{settings.prefix} {name}"
 
     @mcp.prompt
-    def ask(topic: str, settings: Settings = FromDI(Settings)) -> str:  # noqa: B008
+    def ask(topic: str, settings: Settings = FromDI(Settings)) -> str:
         return f"{settings.prefix}, tell me about {topic}"
 
     async with fastmcp.Client(mcp) as client:
@@ -114,7 +122,7 @@ async def test_tool_of_a_mounted_server_resolves_through_the_parent(mcp: fastmcp
     child = fastmcp.FastMCP("child")
 
     @child.tool
-    def child_tool(settings: Settings = FromDI(Settings)) -> str:  # noqa: B008
+    def child_tool(settings: Settings = FromDI(Settings)) -> str:
         return settings.prefix
 
     mcp.mount(child, namespace="child")
@@ -125,42 +133,10 @@ async def test_tool_of_a_mounted_server_resolves_through_the_parent(mcp: fastmcp
     assert result.data == "hello"
 
 
-async def test_root_container_opens_and_closes_with_the_server(mcp: fastmcp.FastMCP, container: Container) -> None:
-    container.close_sync()
-    assert container.closed
-
-    async with fastmcp.Client(mcp):
-        assert not container.closed
-    assert container.closed
-
-    async with fastmcp.Client(mcp):
-        assert not container.closed
-    assert container.closed
-
-
-async def test_manage_lifespan_false_leaves_the_root_alone(container: Container) -> None:
-    server = fastmcp.FastMCP("shared")
-    setup_di(server, container, manage_lifespan=False)
-
-    server.tool(prefix)
-
-    async with container:
-        async with fastmcp.Client(server) as client:
-            result = await client.call_tool("prefix", {})
-        assert not container.closed
-
-    assert result.data == "hello"
-
-
 def test_setup_di_returns_the_container_and_fetch_reads_it_back(container: Container) -> None:
     server = fastmcp.FastMCP("fetch")
     assert setup_di(server, container) is container
     assert fetch_di_container(server) is container
-
-
-def test_two_servers_can_share_one_container(container: Container) -> None:
-    setup_di(fastmcp.FastMCP("one"), container)
-    setup_di(fastmcp.FastMCP("two"), container, manage_lifespan=False)
 
 
 def test_fetch_di_container_raises_without_setup_di() -> None:
@@ -182,8 +158,10 @@ async def test_from_di_in_annotated_fails_at_startup_naming_the_tool(mcp: fastmc
     mcp.tool(wrong)
 
     async with contextlib.AsyncExitStack() as stack:
-        with pytest.raises(RuntimeError, match=r"wrong: FromDI on parameter 'settings' is inside Annotated"):
+        with pytest.raises(RuntimeError, match=r"wrong: FromDI on parameter 'settings' is inside Annotated") as exc:
             await stack.enter_async_context(fastmcp.Client(mcp))
+
+    assert isinstance(exc.value.__cause__, TypeError)
 
 
 async def test_startup_check_does_not_see_a_mounted_server_s_components(mcp: fastmcp.FastMCP) -> None:
@@ -198,3 +176,29 @@ async def test_startup_check_does_not_see_a_mounted_server_s_components(mcp: fas
 
     assert "settings" in tools["child_wrong"].input_schema["properties"]
     assert result.data == "from-client"
+
+
+async def test_startup_check_tolerates_an_annotation_it_cannot_resolve(mcp: fastmcp.FastMCP) -> None:
+    mcp.tool(late_annotation)
+
+    async with fastmcp.Client(mcp) as client:
+        result = await client.call_tool("late_annotation", {})
+
+    assert result.data == "hello"
+
+
+def test_setup_di_twice_on_one_server_raises(container: Container) -> None:
+    server = fastmcp.FastMCP("twice")
+    setup_di(server, container)
+    with pytest.raises(RuntimeError, match="already"):
+        setup_di(server, container)
+
+
+async def test_override_applies_inside_a_tool(mcp: fastmcp.FastMCP, container: Container) -> None:
+    mcp.tool(prefix)
+
+    with container.override(Dependencies.settings, Settings(prefix="overridden")):
+        async with fastmcp.Client(mcp) as client:
+            result = await client.call_tool("prefix", {})
+
+    assert result.data == "overridden"

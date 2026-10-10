@@ -33,5 +33,5 @@ container.validate()  # optional fail-fast; must come after setup_di registers i
 
 
 @mcp.tool
-def greet(name: str, service: GreetingService = FromDI(Dependencies.service)) -> str:  # noqa: B008
+def greet(name: str, service: GreetingService = FromDI(Dependencies.service)) -> str:
     return service.greet(name)

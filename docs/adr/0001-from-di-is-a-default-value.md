@@ -12,6 +12,9 @@ function to a worker thread, so the request container, held in a `ContextVar`, i
 The `Annotated` form has to be rejected somewhere, and nothing in this package runs when
 `@mcp.tool` decorates a function. The earliest point the package controls is its lifespan
 provider, so `setup_di`'s lifespan lists the server's tools, resources, resource templates and
-prompts and raises `TypeError` naming each misused parameter before the first request. A mounted
+prompts and raises `TypeError` naming each misused parameter before the first request. For a
+parameter whose type pydantic cannot put in a schema, such as a plain class, FastMCP refuses the
+tool at decoration before this check runs. An annotation the check cannot resolve, such as a
+`TYPE_CHECKING`-only import, is skipped, since FastMCP accepts it. A mounted
 server's components are listed as proxies without the original function, and a component added
 after startup is never listed, so neither is checked; the docs describe both cases.

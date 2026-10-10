@@ -28,6 +28,7 @@ _MISSING_REQUEST_CONTAINER = (
     "A background task (task=True) runs outside middleware and cannot use FromDI."
 )
 _MISSING_ROOT_CONTAINER = "No container is attached to this server. Call setup_di(server, container) first."
+_ALREADY_SET_UP = "setup_di was already called for this server; call it once per server."
 
 
 def _annotated_misuse(parameter: str) -> str:
@@ -53,7 +54,10 @@ class _FromDI(Dependency[T_co]):
 
 
 def _annotated_from_di_parameters(fn: typing.Callable[..., typing.Any]) -> list[str]:
-    hints = typing.get_type_hints(fn, include_extras=True)
+    try:
+        hints = typing.get_type_hints(fn, include_extras=True)
+    except NameError:
+        return []
     return [
         name
         for name, hint in hints.items()
@@ -63,7 +67,7 @@ def _annotated_from_di_parameters(fn: typing.Callable[..., typing.Any]) -> list[
 
 
 async def _check_components(server: fastmcp.FastMCP) -> None:
-    """Reject `FromDI` inside `Annotated` before any request; a mounted server's components are proxies."""
+    """Reject `FromDI` inside `Annotated`; a mounted server's components are proxies with no `fn`."""
     components = [
         *await server.list_tools(),
         *await server.list_resources(),
@@ -105,9 +109,9 @@ class _DIMiddleware(Middleware):
         self, context: MiddlewareContext[typing.Any], call_next: CallNext[typing.Any, typing.Any]
     ) -> typing.Any:  # noqa: ANN401
         connection = context.fastmcp_context
-        match = None if connection is None else integrations.bind(fastmcp_context_provider, connection)
         async with self._container.build_child_container(
-            scope=Scope.REQUEST, context=None if match is None else match.context
+            scope=Scope.REQUEST,
+            context=None if connection is None else integrations.bind(fastmcp_context_provider, connection).context,
         ) as request_container:
             token = _request_container.set(request_container)
             try:
@@ -117,6 +121,8 @@ class _DIMiddleware(Middleware):
 
 
 def setup_di(server: fastmcp.FastMCP, container: Container, *, manage_lifespan: bool = True) -> Container:
+    if server in _root_containers:
+        raise RuntimeError(_ALREADY_SET_UP)
     if container.find_provider(fastmcp.Context) is None:
         container.add_providers(fastmcp_context_provider)
     _root_containers[server] = container

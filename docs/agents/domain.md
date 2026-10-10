@@ -36,5 +36,5 @@ If your output contradicts an existing ADR, surface it explicitly rather than si
 ## Link style inside `docs/`
 
 The files under `docs/` are read on GitHub, and CI runs an offline link check over every Markdown
-file in the repo. Between files inside `docs/`, use a plain relative `.md` link — from one ADR to
+file in the repo. Between files inside `docs/`, use a plain relative `.md` link: from one ADR to
 another, that is `[ADR-NNNN](NNNN-slug.md)`.

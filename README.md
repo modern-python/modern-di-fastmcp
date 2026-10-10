@@ -59,7 +59,14 @@ def greet(name: str, service: GreetingService = FromDI(Dependencies.service)) ->
     return f"{service.settings.greeting}, {name}!"
 ```
 
-`FromDI` must be the default value, not `Annotated` metadata: FastMCP keeps an `Annotated` parameter in the schema and asks the client for it. The server raises `TypeError` at startup when one of its own tools, resources or prompts does this.
+`FromDI` must be the default value, not `Annotated` metadata: FastMCP keeps an `Annotated` parameter in the schema and asks the client for it. When the parameter's type has no schema, as with a plain class, FastMCP itself refuses the tool when it is defined. When it has one, as with a dataclass, the server raises `TypeError` at startup naming the parameter. The check covers the server's own tools, resources and prompts, not those of a mounted server or ones added after startup.
+
+To stop ruff's B008 from flagging every `FromDI` default, add it to your ruff config:
+
+```toml
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["modern_di_fastmcp.FromDI"]
+```
 
 The current `fastmcp.Context` is resolvable within DI via the pre-built `fastmcp_context_provider` context provider.
 
@@ -67,7 +74,7 @@ The current `fastmcp.Context` is resolvable within DI via the pre-built `fastmcp
 
 | Symbol | Description |
 |---|---|
-| `setup_di(server, container, *, manage_lifespan=True)` | Attaches the container to the server and adds the DI middleware. The server's lifespan opens the container at startup and closes it at shutdown; with `manage_lifespan=False` another application, such as a FastAPI app sharing the container, owns that. At startup it raises `TypeError` for a `FromDI` used inside `Annotated`. Returns the container |
+| `setup_di(server, container, *, manage_lifespan=True)` | Attaches the container to the server and adds the DI middleware. The server's lifespan opens the container at startup and closes it with `close_async()` at shutdown. When several apps share one container, exactly one of them should own its lifespan: pass `manage_lifespan=False` to every other `setup_di`, or the first app to stop closes the container for the rest. At startup it raises `TypeError` for a `FromDI` used inside `Annotated`. Raises `RuntimeError` when called a second time for the same server. Returns the container |
 | `FromDI(dependency)` | Parameter default that resolves a provider (or type) from the request container. Raises `RuntimeError` naming `setup_di` when no request container is active, including in a background task (`task=True`), which FastMCP runs outside middleware |
 | `fetch_di_container(server)` | Returns the root container attached to the server. Raises `RuntimeError` when `setup_di` was not called |
 | `fastmcp_context_provider` | `ContextProvider` for the current `fastmcp.Context` (`REQUEST` scope) |

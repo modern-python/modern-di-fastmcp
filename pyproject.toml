@@ -40,7 +40,7 @@ lint = [
     # Both floors are pydantic wheel coverage, reached through the one resolution uv
     # runs over every group: floored lower, typing-extensions holds pydantic back to a
     # build whose pydantic-core ships no wheel for the interpreter. pydantic needs
-    # 4.12.2 from 3.13, and 2.12 — the first release with a cp314 pydantic-core —
+    # 4.12.2 from 3.13, and 2.12 (the first release with a cp314 pydantic-core)
     # needs 4.14.1.
     "typing-extensions>=4.12.2; python_version < '3.14'",
     "typing-extensions>=4.14.1; python_version >= '3.14'",
@@ -76,6 +76,9 @@ ignore = [
 ]
 isort.lines-after-imports = 2
 isort.no-lines-before = ["standard-library", "local-folder"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["modern_di_fastmcp.FromDI"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]
