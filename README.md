@@ -105,9 +105,10 @@ setup_di(mcp, container, manage_lifespan=False)
 | `fetch_di_container(server)` | Returns the root container attached to the server. Raises `RuntimeError` when `setup_di` was not called |
 | `fastmcp_context_provider` | `ContextProvider` for the current `fastmcp.Context` (`REQUEST` scope) |
 
-## 📦 [PyPI](https://pypi.org/project/modern-di-fastmcp)
+## Links
 
-## 📝 [License](https://github.com/modern-python/modern-di-fastmcp/blob/main/LICENSE)
+- [PyPI](https://pypi.org/project/modern-di-fastmcp)
+- [License](https://github.com/modern-python/modern-di-fastmcp/blob/main/LICENSE)
 
 ## Part of `modern-python`
 
