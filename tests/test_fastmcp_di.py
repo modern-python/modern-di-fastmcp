@@ -4,6 +4,7 @@ import typing
 import fastmcp
 import pytest
 from fastmcp.exceptions import ToolError
+from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 from modern_di import Container
 
 from modern_di_fastmcp import FromDI, fetch_di_container, setup_di
@@ -185,6 +186,31 @@ async def test_startup_check_tolerates_an_annotation_it_cannot_resolve(mcp: fast
         result = await client.call_tool("late_annotation", {})
 
     assert result.data == "hello"
+
+
+class _RecordClientPresence(Middleware):
+    def __init__(self) -> None:
+        self.has_client: list[bool] = []
+
+    async def on_request(
+        self, context: MiddlewareContext[typing.Any], call_next: CallNext[typing.Any, typing.Any]
+    ) -> typing.Any:  # noqa: ANN401
+        connection = context.fastmcp_context
+        self.has_client.append(connection is not None and connection.request_context is not None)
+        return await call_next(context)
+
+
+async def test_startup_check_does_not_run_the_server_s_middleware(mcp: fastmcp.FastMCP) -> None:
+    middleware = _RecordClientPresence()
+    mcp.add_middleware(middleware)
+    mcp.tool(prefix)
+
+    async with fastmcp.Client(mcp) as client:
+        result = await client.call_tool("prefix", {})
+
+    assert result.data == "hello"
+    assert middleware.has_client
+    assert all(middleware.has_client)
 
 
 def test_setup_di_twice_on_one_server_raises(container: Container) -> None:

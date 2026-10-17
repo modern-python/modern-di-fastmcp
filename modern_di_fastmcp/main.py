@@ -69,10 +69,10 @@ def _annotated_from_di_parameters(fn: typing.Callable[..., typing.Any]) -> list[
 async def _check_components(server: fastmcp.FastMCP) -> None:
     """Reject `FromDI` inside `Annotated`; a mounted server's components are proxies with no `fn`."""
     components = [
-        *await server.list_tools(),
-        *await server.list_resources(),
-        *await server.list_resource_templates(),
-        *await server.list_prompts(),
+        *await server.list_tools(run_middleware=False),
+        *await server.list_resources(run_middleware=False),
+        *await server.list_resource_templates(run_middleware=False),
+        *await server.list_prompts(run_middleware=False),
     ]
     problems = [
         f"{component.name}: {_annotated_misuse(parameter)}"
