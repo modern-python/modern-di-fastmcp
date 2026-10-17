@@ -70,6 +70,32 @@ extend-immutable-calls = ["modern_di_fastmcp.FromDI"]
 
 The current `fastmcp.Context` is resolvable within DI via the pre-built `fastmcp_context_provider` context provider.
 
+### Shutdown order
+
+`setup_di` closes the root container from a provider lifespan it adds to the server. Providers added after `setup_di` tear down before the close and can still resolve from the container. These run after the close and get `ContainerClosedError`:
+
+- the teardown of `FastMCP(lifespan=...)`
+- the teardown of providers added before `setup_di`
+
+For these, pass `manage_lifespan=False` and open and close the container in your own server lifespan:
+
+```python
+import collections.abc
+import contextlib
+
+
+@contextlib.asynccontextmanager
+async def lifespan(server: fastmcp.FastMCP) -> collections.abc.AsyncIterator[None]:
+    async with container:
+        yield
+        ...  # shutdown code that still needs the container
+
+
+mcp = fastmcp.FastMCP("greeter", lifespan=lifespan)
+container = Container(groups=[Dependencies])
+setup_di(mcp, container, manage_lifespan=False)
+```
+
 ## API
 
 | Symbol | Description |
