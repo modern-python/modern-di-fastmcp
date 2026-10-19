@@ -1,9 +1,11 @@
 import collections.abc
 import contextlib
 import contextvars
+import logging
 import typing
 import weakref
 
+import anyio
 import fastmcp
 from fastmcp.dependencies import Dependency
 from fastmcp.exceptions import FastMCPError
@@ -21,6 +23,8 @@ _request_container: contextvars.ContextVar[Container | None] = contextvars.Conte
     "modern_di_fastmcp_request_container", default=None
 )
 _root_containers: "weakref.WeakKeyDictionary[fastmcp.FastMCP, Container]" = weakref.WeakKeyDictionary()
+_CHILD_CLOSE_TIMEOUT = 10.0
+_logger = logging.getLogger(__name__)
 
 _MISSING_REQUEST_CONTAINER = (
     "No request container for this call, so the DI middleware did not run for it. "
@@ -109,15 +113,22 @@ class _DIMiddleware(Middleware):
         self, context: MiddlewareContext[typing.Any], call_next: CallNext[typing.Any, typing.Any]
     ) -> typing.Any:  # noqa: ANN401
         connection = context.fastmcp_context
-        async with self._container.build_child_container(
+        request_container = self._container.build_child_container(
             scope=Scope.REQUEST,
             context=None if connection is None else integrations.bind(fastmcp_context_provider, connection).context,
-        ) as request_container:
-            token = _request_container.set(request_container)
-            try:
-                return await call_next(context)
-            finally:
-                _request_container.reset(token)
+        )
+        token = _request_container.set(request_container)
+        try:
+            return await call_next(context)
+        finally:
+            _request_container.reset(token)
+            with anyio.move_on_after(_CHILD_CLOSE_TIMEOUT, shield=True) as close_scope:
+                await request_container.close_async()
+            if close_scope.cancel_called:
+                _logger.warning(
+                    "Closing the request container did not finish within %s s; its remaining finalizers did not run",
+                    _CHILD_CLOSE_TIMEOUT,
+                )
 
 
 def setup_di(server: fastmcp.FastMCP, container: Container, *, manage_lifespan: bool = True) -> Container:
