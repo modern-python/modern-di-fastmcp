@@ -1,3 +1,11 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)"  srcset="https://raw.githubusercontent.com/modern-python/.github/main/brand/projects/modern-di-fastmcp/lockup-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/modern-python/.github/main/brand/projects/modern-di-fastmcp/lockup-light.svg">
+    <img alt="modern-di-fastmcp" src="https://raw.githubusercontent.com/modern-python/.github/main/brand/projects/modern-di-fastmcp/lockup.png" width="420">
+  </picture>
+</p>
+
 [![PyPI version](https://img.shields.io/pypi/v/modern-di-fastmcp.svg)](https://pypi.org/project/modern-di-fastmcp/)
 [![Supported Python versions](https://img.shields.io/pypi/pyversions/modern-di-fastmcp.svg)](https://pypi.org/project/modern-di-fastmcp/)
 [![Downloads](https://static.pepy.tech/badge/modern-di-fastmcp/month)](https://pepy.tech/projects/modern-di-fastmcp)
